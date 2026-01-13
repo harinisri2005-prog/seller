@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import './PosterUpload.css';
 import './Pricing.css';
 
 export default function PosterUpload() {
     const locationState = useLocation();
-    const navigate = useNavigate();
-    const plan = locationState.state?.plan || { posts: 0, price: 0 }; // Default if accessed directly
+    const plan = locationState.state?.plan || { posts: 999, price: 0 }; // Unlimited access by default
 
     const [image, setImage] = useState(null);
     const [preview, setPreview] = useState(null);
@@ -78,7 +77,9 @@ export default function PosterUpload() {
         setVideoPreview(url);
     };
 
-    const handleSubmit = () => {
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleSubmit = async () => {
         if (!image) return alert("Please upload a poster first.");
 
         if (!description || !offerRate || !offerPeriod) {
@@ -90,35 +91,90 @@ export default function PosterUpload() {
             return;
         }
 
-        // Add to history
-        const newUpload = {
-            id: Date.now(),
-            name: image.name,
-            preview: preview,
-            video: video ? video.name : null,
-            videoPreview: videoPreview,
-            description,
-            offerRate,
-            offerPeriod,
-            date: new Date().toLocaleDateString(),
-            location: " Link Provided",
-            locationDetails: manualLocation,
-            status: "Pending Approval"
-        };
+        setIsUploading(true);
 
-        setHistory([newUpload, ...history]);
+        try {
+            // 1. Upload Image
+            const imageFormData = new FormData();
+            imageFormData.append('image', image);
 
-        // Reset form
-        setImage(null);
-        setPreview(null);
-        setVideo(null);
-        setVideoPreview(null);
-        setManualLocation('');
-        setDescription('');
-        setOfferRate('');
-        setOfferPeriod('');
+            const imageRes = await fetch('http://localhost:5000/api/upload/image', {
+                method: 'POST',
+                body: imageFormData,
+            });
+            const imageData = await imageRes.json();
+            if (!imageRes.ok) throw new Error(imageData.error || 'Image upload failed');
 
-        alert("Content Submitted Successfully!");
+            // 2. Upload Video (if exists)
+            let videoData = {};
+            if (video) {
+                const videoFormData = new FormData();
+                videoFormData.append('video', video);
+
+                const videoRes = await fetch('http://localhost:5000/api/upload/video', {
+                    method: 'POST',
+                    body: videoFormData,
+                });
+                videoData = await videoRes.json();
+                if (!videoRes.ok) throw new Error(videoData.error || 'Video upload failed');
+            }
+
+            // 3. Create Post in Database
+            const postPayload = {
+                description,
+                imageUrl: imageData.url,
+                videoUrl: videoData.cloudinary_url || '',
+                videoAssetId: videoData.mux_asset_id || '',
+                location: manualLocation,
+                offerPrice: offerRate, // Mapping Offer Rate to Offer Price field schema
+                offerPeriod: offerPeriod
+            };
+
+            const createRes = await fetch('http://localhost:5000/api/upload/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(postPayload),
+            });
+
+            const createData = await createRes.json();
+            if (!createRes.ok) throw new Error(createData.error || 'Failed to save post');
+
+            // Add to history (UI update)
+            const newUpload = {
+                id: createData._id || Date.now(),
+                name: image.name,
+                preview: preview,
+                video: video ? video.name : null,
+                videoPreview: videoPreview,
+                description,
+                offerRate,
+                offerPeriod,
+                date: new Date().toLocaleDateString(),
+                location: " Link Provided",
+                locationDetails: manualLocation,
+                status: "Pending Approval" // You might want to get this from backend
+            };
+
+            setHistory([newUpload, ...history]);
+
+            // Reset form
+            setImage(null);
+            setPreview(null);
+            setVideo(null);
+            setVideoPreview(null);
+            setManualLocation('');
+            setDescription('');
+            setOfferRate('');
+            setOfferPeriod('');
+
+            alert("Content Submitted and Saved Successfully!");
+
+        } catch (error) {
+            console.error('Upload Error:', error);
+            alert(`Upload failed: ${error.message}`);
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     return (
@@ -286,8 +342,8 @@ export default function PosterUpload() {
                 </div>
 
                 <div className="submit-section">
-                    <button className="btn-primary" onClick={handleSubmit} disabled={!image || remainingUploads <= 0 || !manualLocation || !description}>
-                        Publish Post
+                    <button className="btn-primary" onClick={handleSubmit} disabled={!image || remainingUploads <= 0 || !manualLocation || !description || isUploading}>
+                        {isUploading ? 'Publishing...' : 'Publish Post'}
                     </button>
                 </div>
             </div>

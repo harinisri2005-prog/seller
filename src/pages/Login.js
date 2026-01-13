@@ -7,44 +7,44 @@ import { useNavigate, Link } from "react-router-dom";
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const submit = async (e) => {
     e.preventDefault();
+    setError("");
 
-    // Check if email is provided
+    // Validation - just check if email is provided
     if (!email) {
-      alert("Please enter an email");
+      setError("Please enter an email");
       return;
     }
 
-    try {
-      const res = await loginVendor({ email, password: password || "default" });
-      login(res.data.token, res.data.vendorStatus, res.data.vendor);
+    setLoading(true);
 
-      navigate("/pricing");
-    } catch (error) {
-      console.log("API Login failed, using bypass.", error);
-      // BYPASS: Allow entry even if API fails
+    // BYPASS MODE: Accept any email/password
+    // Create a mock login without checking credentials
+    setTimeout(() => {
       const mockVendor = {
-        id: "bypass-" + Date.now(),
+        id: 'bypass-user',
         email: email,
-        shop_name: "My Shop",
-        owner_name: "Vendor",
-        status: "APPROVED"
+        shop_name: 'Demo Shop',
+        owner_name: 'Demo User',
+        status: 'APPROVED'
       };
 
-      login("mock-token-" + Date.now(), "APPROVED", mockVendor);
-      navigate("/pricing");
-    }
-  };
+      const mockToken = 'bypass-token-' + Date.now();
 
-  // Auto-login when Enter is pressed in email field
-  const handleEmailKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      submit(e);
-    }
+      // Login with mock data
+      login(mockToken, 'APPROVED', mockVendor);
+
+      // Redirect to pricing page
+      navigate("/pricing");
+
+      setLoading(false);
+    }, 500); // Small delay to show loading state
   };
 
   return (
@@ -52,23 +52,28 @@ const Login = () => {
       <form className="auth-box" onSubmit={submit}>
         <h2>Seller Login</h2>
 
+        {error && <div className="error-text">{error}</div>}
+
         <input
           type="email"
-          placeholder="Email (Press Enter to login)"
+          placeholder="Email"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          onKeyPress={handleEmailKeyPress}
           required
+          disabled={loading}
         />
 
         <input
           type="password"
-          placeholder="Password"
+          placeholder="Password (optional)"
           value={password}
           onChange={e => setPassword(e.target.value)}
+          disabled={loading}
         />
 
-        <button type="submit">Login</button>
+        <button type="submit" disabled={loading}>
+          {loading ? "Logging in..." : "Login"}
+        </button>
 
         <div className="auth-link">
           New Seller? <Link to="/vendor/signup">Sign up</Link>

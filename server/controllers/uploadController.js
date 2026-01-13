@@ -1,6 +1,7 @@
 const cloudinary = require('../config/cloudinary');
 const mux = require('../config/mux');
 const streamifier = require('streamifier');
+const Post = require('../models/Post');
 
 exports.uploadImage = async (req, res) => {
     try {
@@ -56,6 +57,27 @@ exports.uploadVideo = async (req, res) => {
             playback_id: asset.playback_ids[0].id,
             cloudinary_url: result.secure_url
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.createPost = async (req, res) => {
+    try {
+        const { description, imageUrl, videoUrl, videoAssetId, location, offerPrice, offerPeriod } = req.body;
+
+        const newPost = new Post({
+            description,
+            imageUrl,
+            videoUrl,
+            videoAssetId,
+            location,
+            offerPrice,
+            offerPeriod
+        });
+
+        const savedPost = await newPost.save();
+        res.status(201).json(savedPost);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

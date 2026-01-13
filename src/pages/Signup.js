@@ -83,9 +83,14 @@ const Signup = () => {
     e.preventDefault();
     setError("");
 
-    // Relaxed Validation for "Any Email" entry
+    // Validation
     if (!form.email || !form.password) {
       setError("Email and Password are required");
+      return;
+    }
+
+    if (!form.shopName || !form.ownerName) {
+      setError("Shop Name and Owner Name are required");
       return;
     }
 
@@ -94,7 +99,12 @@ const Signup = () => {
       return;
     }
 
-    // ---- UPLOAD KYC TO CLOUDINARY (Optional now) ----
+    if (form.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    // ---- UPLOAD KYC TO CLOUDINARY (Optional) ----
     setLoading(true);
     const kycUrls = {};
     try {
@@ -105,30 +115,32 @@ const Signup = () => {
         }
       }
 
-      // Auto-fill defaults if missing
       const signupData = {
         ...form,
-        shopName: form.shopName || "My Shop",
-        ownerName: form.ownerName || "Valued Vendor",
-        phone: form.phone || "0000000000",
-        state: form.state || "Default State",
-        city: form.city || "Default City",
-        pincode: form.pincode || "000000",
-        address: form.address || "Default Address",
         kycUrls
       };
 
       const { data } = await signupVendor(signupData);
 
-      // Auto Login
+      // Auto Login after successful signup
       if (data.token) {
         login(data.token, data.vendorStatus, data.vendor);
+        navigate("/pricing");
+      } else {
+        setError("Signup successful but login failed. Please login manually.");
+        navigate("/vendor/login");
       }
-
-      navigate("/pricing");
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || "Signup failed. Please try again.");
+      console.error("Signup error:", err);
+
+      // Handle specific error messages
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.response?.status === 400) {
+        setError("Email already registered. Please login instead.");
+      } else {
+        setError("Signup failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -161,11 +173,11 @@ const Signup = () => {
         <div className="form-row">
           <div className="form-group">
             <label>Shop Name</label>
-            <input name="shopName" placeholder="Shop Name" value={form.shopName} onChange={handleChange} />
+            <input name="shopName" placeholder="Shop Name" value={form.shopName} onChange={handleChange} required />
           </div>
           <div className="form-group">
             <label>Owner Name</label>
-            <input name="ownerName" placeholder="Owner Name" value={form.ownerName} onChange={handleChange} />
+            <input name="ownerName" placeholder="Owner Name" value={form.ownerName} onChange={handleChange} required />
           </div>
         </div>
 

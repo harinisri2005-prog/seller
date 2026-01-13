@@ -1,120 +1,101 @@
-const supabase = require('../config/supabase');
+const User = require('../models/User');
 
 exports.signup = async (req, res) => {
     const { email, password, shopName, ownerName, phone, state, city, pincode, address, kycUrls } = req.body;
+
     try {
-        const { data, error } = await supabase.auth.signUp({
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Email already registered' });
+        }
+
+        // Create new user
+        const newUser = new User({
             email,
-            password,
-            options: {
-                data: { shop_name: shopName, owner_name: ownerName }
-            }
+            password, // Will be hashed by the pre-save hook
+            shopName,
+            ownerName,
+            phone,
+            state,
+            city,
+            pincode,
+            address,
+            kycUrls,
+            status: 'APPROVED' // Auto-approve
         });
 
-        if (error) throw error;
+        await newUser.save();
 
-        // Create a profile in our public.vendors table
-        const { error: profileError } = await supabase
-            .from('vendors')
-            .insert([
-                {
-                    id: data.user.id,
-                    email,
-                    shop_name: shopName,
-                    owner_name: ownerName,
-                    phone,
-                    state,
-                    city,
-                    pincode,
-                    address,
-                    kyc_urls: kycUrls,
-                    status: 'APPROVED'
-                }
-            ]);
-
-        if (profileError) {
-            // If profile creation fails (unlikely if auth succeeded, but possible if duplicate), 
-            // we might checking if it's a duplicate. 
-            // For "any email" request, we'll just suppress and return success.
-            console.log("Profile creation warning:", profileError.message);
-        }
+        // Return user data (without password)
+        const userResponse = {
+            id: newUser._id,
+            email: newUser.email,
+            shop_name: newUser.shopName,
+            owner_name: newUser.ownerName,
+            phone: newUser.phone,
+            state: newUser.state,
+            city: newUser.city,
+            pincode: newUser.pincode,
+            address: newUser.address,
+            status: newUser.status
+        };
 
         res.status(201).json({
             message: 'Signup successful',
-            user: data.user,
-            token: data.session?.access_token || 'mock-token-' + Date.now(),
-            vendorStatus: 'APPROVED',
-            vendor: {
-                id: data.user.id,
-                email,
-                shop_name: shopName,
-                owner_name: ownerName
-            }
+            user: userResponse,
+            token: 'token-' + newUser._id,
+            vendorStatus: newUser.status,
+            vendor: userResponse
         });
 
     } catch (error) {
-        console.log("Signup error (Bypass active):", error.message);
-        // BYPASS: If signup fails (e.g. user exists), return success with mock token
-        // This allows "any email" to work even if it's already taken or invalid for Supabase
-        res.status(200).json({
-            message: 'Signup successful (Bypass)',
-            token: 'mock-token-' + Date.now(),
-            vendorStatus: 'APPROVED',
-            vendor: {
-                id: 'mock-id-' + Date.now(),
-                email: email || 'guest@example.com',
-                shop_name: shopName || 'Guest Shop',
-                owner_name: ownerName || 'Guest'
-            }
-        });
+        console.error('Signup error:', error);
+        res.status(500).json({ error: error.message || 'Signup failed' });
     }
 };
 
 exports.login = async (req, res) => {
     const { email, password } = req.body;
 
-    console.log("Login attempt with email:", email);
-
-    // BYPASS MODE: Allow any email/password combination
     try {
-        // First, try to find existing vendor in database
-        const { data: existingVendor } = await supabase
-            .from('vendors')
-            .select('*')
-            .eq('email', email)
-            .single();
+        // Find user by email
+        const user = await User.findOne({ email });
 
-        if (existingVendor) {
-            // Return existing vendor data
-            console.log("Found existing vendor:", email);
-            return res.status(200).json({
-                message: 'Login successful (Existing User)',
-                token: 'mock-token-' + Date.now(),
-                vendorStatus: existingVendor.status,
-                vendor: existingVendor
-            });
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid email or password' });
         }
-    } catch (dbError) {
-        console.log("No existing vendor found, creating mock user");
+
+        // Check password
+        const isPasswordValid = await user.comparePassword(password);
+
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        // Return user data (without password)
+        const userResponse = {
+            id: user._id,
+            email: user.email,
+            shop_name: user.shopName,
+            owner_name: user.ownerName,
+            phone: user.phone,
+            state: user.state,
+            city: user.city,
+            pincode: user.pincode,
+            address: user.address,
+            status: user.status
+        };
+
+        res.status(200).json({
+            message: 'Login successful',
+            token: 'token-' + user._id,
+            vendorStatus: user.status,
+            vendor: userResponse
+        });
+
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Login failed' });
     }
-
-    // If no existing vendor, return mock data for any email
-    return res.status(200).json({
-        message: 'Login successful (Mock User)',
-        token: 'mock-token-' + Date.now(),
-        vendorStatus: 'APPROVED',
-        vendor: {
-            id: 'mock-id-' + Date.now(),
-            email: email || 'guest@example.com',
-            shop_name: email ? `${email.split('@')[0]}'s Shop` : 'Guest Shop',
-            owner_name: email ? email.split('@')[0] : 'Guest User',
-            phone: '9999999999',
-            state: 'Test State',
-            city: 'Test City',
-            pincode: '000000',
-            address: 'Test Address',
-            kyc_urls: {},
-            status: 'APPROVED'
-        }
-    });
 };

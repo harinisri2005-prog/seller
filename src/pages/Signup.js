@@ -4,6 +4,7 @@ import { signupVendor } from "../api/authApi";
 import { uploadImage } from "../api/uploadApi";
 import { useNavigate, Link } from "react-router-dom";
 import { locations } from "../data/locations";
+import { useAuth } from "../context/AuthContext";
 
 const REQUIRED_KYC = ["AADHAAR", "PAN", "GST"];
 
@@ -16,6 +17,7 @@ const KYC_LABELS = {
 
 const Signup = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [form, setForm] = useState({
     shopName: "",
@@ -32,7 +34,6 @@ const Signup = () => {
 
   // { AADHAAR: File, PAN: File, GST: File, TRADE_LICENSE?: File }
   const [kycDocs, setKycDocs] = useState({});
-  const [selectedKycType, setSelectedKycType] = useState("");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,9 +54,10 @@ const Signup = () => {
   };
 
   // ---------------- KYC UPLOAD ----------------
-  const handleKycUpload = (e) => {
+  // ---------------- KYC UPLOAD ----------------
+  const handleKycUpload = (type, e) => {
     const file = e.target.files[0];
-    if (!file || !selectedKycType) return;
+    if (!file) return;
 
     const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
     if (!allowedTypes.includes(file.type)) {
@@ -72,7 +74,7 @@ const Signup = () => {
 
     setKycDocs((prev) => ({
       ...prev,
-      [selectedKycType]: file
+      [type]: file
     }));
   };
 
@@ -81,18 +83,9 @@ const Signup = () => {
     e.preventDefault();
     setError("");
 
-    if (form.phone.length !== 10) {
-      setError("Phone number must be exactly 10 digits");
-      return;
-    }
-
-    if (form.pincode.length !== 6) {
-      setError("Pincode must be exactly 6 digits");
-      return;
-    }
-
-    if (form.password.length < 6) {
-      setError("Password must be at least 6 characters");
+    // Relaxed Validation for "Any Email" entry
+    if (!form.email || !form.password) {
+      setError("Email and Password are required");
       return;
     }
 
@@ -101,38 +94,40 @@ const Signup = () => {
       return;
     }
 
-    // ---- REQUIRED KYC CHECK ----
-    const missingDocs = REQUIRED_KYC.filter(
-      (doc) => !kycDocs[doc]
-    );
-
-    if (missingDocs.length > 0) {
-      setError(
-        `Please upload mandatory documents: ${missingDocs
-          .map((d) => KYC_LABELS[d])
-          .join(", ")}`
-      );
-      return;
-    }
-
-    // ---- UPLOAD KYC TO CLOUDINARY FIRST ----
+    // ---- UPLOAD KYC TO CLOUDINARY (Optional now) ----
     setLoading(true);
     const kycUrls = {};
     try {
-      for (const [type, file] of Object.entries(kycDocs)) {
-        const { data } = await uploadImage(file);
-        kycUrls[type] = data.url;
+      if (Object.keys(kycDocs).length > 0) {
+        for (const [type, file] of Object.entries(kycDocs)) {
+          const { data } = await uploadImage(file);
+          kycUrls[type] = data.url;
+        }
       }
 
+      // Auto-fill defaults if missing
       const signupData = {
         ...form,
+        shopName: form.shopName || "My Shop",
+        ownerName: form.ownerName || "Valued Vendor",
+        phone: form.phone || "0000000000",
+        state: form.state || "Default State",
+        city: form.city || "Default City",
+        pincode: form.pincode || "000000",
+        address: form.address || "Default Address",
         kycUrls
       };
 
-      await signupVendor(signupData);
-      alert("Registration successful!");
+      const { data } = await signupVendor(signupData);
+
+      // Auto Login
+      if (data.token) {
+        login(data.token, data.vendorStatus, data.vendor);
+      }
+
       navigate("/pricing");
     } catch (err) {
+      console.error(err);
       setError(err.response?.data?.error || "Signup failed. Please try again.");
     } finally {
       setLoading(false);
@@ -153,11 +148,6 @@ const Signup = () => {
       delete updated[type];
       return updated;
     });
-
-    // If user removed the currently selected type, reset dropdown
-    if (selectedKycType === type) {
-      setSelectedKycType("");
-    }
   };
 
 
@@ -168,112 +158,117 @@ const Signup = () => {
 
         {error && <div className="error-text">{error}</div>}
 
-        <input name="shopName" placeholder="Shop Name" value={form.shopName} onChange={handleChange} required />
-        <input name="ownerName" placeholder="Owner Name" value={form.ownerName} onChange={handleChange} required />
-        <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} required />
-        <input name="phone" placeholder="Phone (10-digit)" value={form.phone} onChange={handleChange} required />
+        <div className="form-row">
+          <div className="form-group">
+            <label>Shop Name</label>
+            <input name="shopName" placeholder="Shop Name" value={form.shopName} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Owner Name</label>
+            <input name="ownerName" placeholder="Owner Name" value={form.ownerName} onChange={handleChange} />
+          </div>
+        </div>
 
-        <select disabled value="India">
-          <option>India</option>
-        </select>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Email</label>
+            <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} required />
+          </div>
+          <div className="form-group">
+            <label>Phone</label>
+            <input name="phone" placeholder="Phone (10-digit)" value={form.phone} onChange={handleChange} />
+          </div>
+        </div>
 
-        <select name="state" value={form.state} onChange={handleChange} required>
-          <option value="">Select State</option>
-          {Object.keys(locations).map((state) => (
-            <option key={state} value={state}>{state}</option>
-          ))}
-        </select>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Country</label>
+            <select disabled value="India">
+              <option>India</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>State</label>
+            <select name="state" value={form.state} onChange={handleChange}>
+              <option value="">Select State</option>
+              {Object.keys(locations).map((state) => (
+                <option key={state} value={state}>{state}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-        <select name="city" value={form.city} onChange={handleChange} disabled={!form.state} required>
-          <option value="">
-            {form.state ? "Select District" : "Select State first"}
-          </option>
-          {(locations[form.state] || []).map((city) => (
-            <option key={city} value={city}>{city}</option>
-          ))}
-        </select>
+        <div className="form-row">
+          <div className="form-group">
+            <label>City/District</label>
+            <select name="city" value={form.city} onChange={handleChange} disabled={!form.state}>
+              <option value="">
+                {form.state ? "Select District" : "Select State first"}
+              </option>
+              {(locations[form.state] || []).map((city) => (
+                <option key={city} value={city}>{city}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Pincode</label>
+            <input name="pincode" placeholder="Pincode" value={form.pincode} onChange={handleChange} />
+          </div>
+        </div>
 
-        <input name="pincode" placeholder="Pincode" value={form.pincode} onChange={handleChange} required />
-        <textarea name="address" placeholder="Full Address" value={form.address} onChange={handleChange} required />
+        <div className="form-group">
+          <label>Full Address</label>
+          <textarea name="address" placeholder="Full Address" value={form.address} onChange={handleChange} />
+        </div>
 
-        <input type="password" name="password" placeholder="Password" value={form.password} onChange={handleChange} required />
-        <input type="password" name="confirmPassword" placeholder="Confirm Password" value={form.confirmPassword} onChange={handleChange} required />
+        <div className="form-row">
+          <div className="form-group">
+            <label>Password</label>
+            <input type="password" name="password" placeholder="Password" value={form.password} onChange={handleChange} required />
+          </div>
+          <div className="form-group">
+            <label>Confirm Password</label>
+            <input type="password" name="confirmPassword" placeholder="Confirm Password" value={form.confirmPassword} onChange={handleChange} required />
+          </div>
+        </div>
 
         {/* -------- KYC SECTION -------- */}
-        <select
-          value={selectedKycType}
-          onChange={(e) => setSelectedKycType(e.target.value)}
-        >
-          <option value="">Select KYC Type</option>
-          <option value="AADHAAR">Aadhaar Card (Required)</option>
-          <option value="PAN">PAN Card (Required)</option>
-          <option value="GST">GST Certificate (Required)</option>
-          <option value="TRADE_LICENSE">Trade License (Optional)</option>
-        </select>
+        <div className="kyc-section">
+          <h3>Upload KYC Documents</h3>
+          <div className="kyc-grid">
+            {Object.entries(KYC_LABELS).map(([type, label]) => (
+              <div key={type} className="kyc-upload-box">
+                <label>{label} {REQUIRED_KYC.includes(type) && "*"}</label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleKycUpload(type, e)}
+                />
 
-        <input
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          onChange={handleKycUpload}
-          disabled={!selectedKycType}
-        />
-
-        {/* -------- UPLOADED DOCS WITH FILE NAMES -------- */}
-        {Object.keys(kycDocs).length > 0 && (
-          <div style={{ fontSize: "13px", color: "#aaa", marginTop: "12px" }}>
-            <strong>Uploaded Documents:</strong>
-
-            <ul style={{ marginTop: "8px", paddingLeft: "18px" }}>
-              {Object.entries(kycDocs).map(([type, file]) => (
-                <li
-                  key={type}
-                  style={{
-                    marginBottom: "8px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    flexWrap: "wrap"
-                  }}
-                >
-                  {/* Document label */}
-                  <span style={{ color: "#d4af37" }}>
-                    {KYC_LABELS[type]} →
-                  </span>
-
-                  {/* Clickable file name (PREVIEW) */}
-                  <span
-                    onClick={() => previewFile(file)}
-                    style={{
-                      color: "#000",
-                      cursor: "pointer",
-                      textDecoration: "underline"
-                    }}
-                    title="Click to preview"
-                  >
-                    {file.name}
-                  </span>
-
-                  {/* Remove (✕) */}
-                  <span
-                    onClick={() => removeKyc(type)}
-                    title="Remove document"
-                    style={{
-                      color: "#ff6b6b",
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                      marginLeft: "6px"
-                    }}
-                  >
-                    ✕
-                  </span>
-                </li>
-              ))}
-            </ul>
+                {kycDocs[type] && (
+                  <div className="file-preview-info">
+                    <span
+                      onClick={() => previewFile(kycDocs[type])}
+                      title="Click to preview"
+                      className="file-name"
+                    >
+                      {kycDocs[type].name}
+                    </span>
+                    <span
+                      onClick={() => removeKyc(type)}
+                      title="Remove"
+                      className="remove-btn"
+                    >
+                      ✕
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
-
-        <button disabled={loading}>
+        <button disabled={loading} className="submit-btn">
           {loading ? "Please wait..." : "Register"}
         </button>
 

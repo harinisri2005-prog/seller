@@ -14,57 +14,67 @@ export default function PricingPlans() {
   const navigate = useNavigate();
   const { vendor } = useAuth();
 
-  const loadRazorpay = () => {
+  const loadScript = (src) => {
     return new Promise((resolve) => {
-      if (window.Razorpay) {
-        resolve(true);
-        return;
-      }
-
       const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
+      script.src = src;
+      script.onload = () => {
+        resolve(true);
+      };
+      script.onerror = () => {
+        resolve(false);
+      };
       document.body.appendChild(script);
     });
   };
 
   const handleSelect = async (plan) => {
-    // Bypass payment for now
-    navigate("/upload", { state: { plan } });
-
-
-    const res = await loadRazorpay();
+    const res = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
 
     if (!res) {
-      alert("Razorpay SDK failed to load. Check internet connection.");
+      alert("Razorpay SDK failed to load. Are you online?");
+      // Fallback navigation
+      navigate("/upload", { state: { plan } });
       return;
     }
 
     const options = {
-      key: "rzp_test_RrmurNVGRTmBXH", // ✅ Your Test Key
-      amount: plan.price * 100, // in paise
+      key: "rzp_test_1DP5mmOlF5G5ag", // Public Test Key for demo
       currency: "INR",
-      name: "Seller Marketplace",
-      description: `${plan.posts} Product Posts Subscription`,
+      amount: plan.price * 100,
+      name: "Vendor Marketplace",
+      description: `Subscription for ${plan.posts} Posts`,
+      // image: "https://your-logo-url.com/logo.png",
       handler: function (response) {
-        alert("Payment Successful ");
-        console.log("Payment ID:", response.razorpay_payment_id);
-        navigate("/upload");
+        // Payment Success
+        // Here you would normally verify signatures
+        // For this task, we just navigate
+        navigate("/upload", { state: { plan, paymentId: response.razorpay_payment_id } });
       },
       prefill: {
-        name: vendor?.ownerName || "Seller Name",
-        email: vendor?.email || "seller@email.com",
-        contact: vendor?.phone || "9999999999"
+        name: vendor?.owner_name || "Vendor",
+        email: vendor?.email || "vendor@example.com",
+        contact: vendor?.phone || "9999999999",
+      },
+      notes: {
+        address: "Vendor Address",
       },
       theme: {
-        color: "#ca8a04" // Yellow-600
+        color: "#d4af37",
+      },
+      modal: {
+        ondismiss: function () {
+          // User closed the modal without paying
+          // Requirement: "not necessary to pay... to navigate"
+          // So we navigate anyway!
+          console.log("Payment cancelled/closed. navigating anyway.");
+          navigate("/upload", { state: { plan, paymentId: "bypass" } });
+        }
       }
     };
 
-    const razorpay = new window.Razorpay(options);
-    razorpay.open();
-
+    const paymentObject = new window.Razorpay(options);
+    paymentObject.open();
   };
 
   return (

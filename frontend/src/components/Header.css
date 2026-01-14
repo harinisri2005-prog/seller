@@ -1,0 +1,96 @@
+/* Header.css */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 40px;
+    height: 80px;
+    background-color: #fbf4f6;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    font-family: 'Outfit', sans-serif;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #4C0F2E;
+    /* Plum/Maroon color */
+    letter-spacing: 1px;
+    transition: opacity 0.3s ease;
+}
+
+.logo:hover {
+    opacity: 0.9;
+}
+
+/* Ensure SVG inherits specific styles or stays correctly sized */
+.logo svg {
+    color: #D4AF37;
+    /* Fallback if var not set */
+}
+
+.header-nav {
+    display: flex;
+    gap: 40px;
+}
+
+.nav-link {
+    text-decoration: none;
+    color: #4C0F2E;
+    /* Plum color */
+    font-size: 1.0rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding-bottom: 5px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.nav-link:hover {
+    color: #D4AF37;
+}
+
+.nav-link.active {
+    color: #4C0F2E;
+}
+
+/* The underline effect for active/hover */
+.nav-link::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: 0;
+    left: 0;
+    background-color: #4C0F2E;
+    /* Underline color */
+    transition: width 0.3s ease;
+}
+
+.nav-link.active::after {
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .app-header {
+        padding: 0 20px;
+        height: 70px;
+    }
+
+    .header-nav {
+        display: none;
+    }
+
+    .logo {
+        font-size: 1.5 rem;
+    }
+}

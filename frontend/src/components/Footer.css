@@ -1,0 +1,11 @@
+.app-footer {
+    width: 100%;
+    padding: 24px 0;
+    text-align: center;
+    background-color: transparent;
+    color: #6B5D52;
+    /* Muted text color */
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.2rem;
+    margin-top: auto;
+}

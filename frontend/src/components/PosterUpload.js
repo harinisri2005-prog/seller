@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import './PosterUpload.css';
 import './Pricing.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 export default function PosterUpload() {
     const locationState = useLocation();
     const plan = locationState.state?.plan || { posts: 999, price: 0 }; // Unlimited access by default
@@ -25,7 +27,7 @@ export default function PosterUpload() {
     React.useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const res = await fetch('http://localhost:5000/api/upload/my-posts', {
+                const res = await fetch(`${API_BASE_URL}/api/upload/my-posts`, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
                 if (res.ok) {
@@ -131,7 +133,7 @@ export default function PosterUpload() {
             const imageFormData = new FormData();
             imageFormData.append('image', image);
 
-            const imageRes = await fetch('http://localhost:5000/api/upload/image', {
+            const imageRes = await fetch(`${API_BASE_URL}/api/upload/image`, {
                 method: 'POST',
                 body: imageFormData,
             });
@@ -144,7 +146,7 @@ export default function PosterUpload() {
                 const videoFormData = new FormData();
                 videoFormData.append('video', video);
 
-                const videoRes = await fetch('http://localhost:5000/api/upload/video', {
+                const videoRes = await fetch(`${API_BASE_URL}/api/upload/video`, {
                     method: 'POST',
                     body: videoFormData,
                 });
@@ -164,7 +166,7 @@ export default function PosterUpload() {
                 expiryDate: expiryDate
             };
 
-            const createRes = await fetch('http://localhost:5000/api/upload/create', {
+            const createRes = await fetch(`${API_BASE_URL}/api/upload/create`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

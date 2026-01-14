@@ -6,12 +6,6 @@ const router = express.Router();
 
 router.post(
   "/signup",
-  upload.fields([
-    { name: "AADHAAR", maxCount: 1 },
-    { name: "PAN", maxCount: 1 },
-    { name: "GST", maxCount: 1 },
-    { name: "TRADE_LICENSE", maxCount: 1 }
-  ]),
   signup
 );
 

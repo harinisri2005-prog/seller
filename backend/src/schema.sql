@@ -1,0 +1,34 @@
+CREATE TABLE IF NOT EXISTS vendors (
+  id SERIAL PRIMARY KEY,
+  shop_name VARCHAR(255) NOT NULL,
+  owner_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  phone VARCHAR(50) NOT NULL,
+  password_hash TEXT NOT NULL,
+  status VARCHAR(50) DEFAULT 'PENDING',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS kyc_documents (
+  id SERIAL PRIMARY KEY,
+  vendor_id INTEGER REFERENCES vendors(id) ON DELETE CASCADE,
+  doc_type VARCHAR(50) NOT NULL,
+  file_url TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS posts (
+  id SERIAL PRIMARY KEY,
+  vendor_id INTEGER REFERENCES vendors(id) ON DELETE CASCADE,
+  description TEXT,
+  image_url TEXT NOT NULL,
+  video_url TEXT,
+  video_asset_id TEXT,
+  location TEXT,
+  offer_price VARCHAR(100),
+  offer_period VARCHAR(100),
+  approval_status VARCHAR(50) DEFAULT 'PENDING',
+  expiry_date TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'ACTIVE',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

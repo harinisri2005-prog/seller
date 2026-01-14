@@ -5,44 +5,63 @@ import jwt from "jsonwebtoken";
 /* ---------------- SIGNUP ---------------- */
 export const signup = async (req, res) => {
   try {
-    const { shopName, ownerName, email, phone, password } = req.body;
+    const { shopName, ownerName, email, phone, password, kycUrls } = req.body;
 
     if (!shopName || !ownerName || !email || !phone || !password) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    if (!req.files?.AADHAAR || !req.files?.PAN || !req.files?.GST) {
-      return res.status(400).json({ message: "Required KYC missing" });
+    if (!kycUrls || !kycUrls.AADHAAR || !kycUrls.PAN || !kycUrls.GST) {
+      return res.status(400).json({ message: "Required KYC documents missing" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const vendorResult = await pool.query(
       `INSERT INTO vendors 
-       (shop_name, owner_name, email, phone, password_hash)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING id`,
+       (shop_name, owner_name, email, phone, password_hash, status)
+       VALUES ($1,$2,$3,$4,$5, 'PENDING')
+       RETURNING id, shop_name, owner_name, email, status`,
       [shopName, ownerName, email, phone, hashedPassword]
     );
 
-    const vendorId = vendorResult.rows[0].id;
+    const vendor = vendorResult.rows[0];
+    const vendorId = vendor.id;
 
-    for (const docType in req.files) {
-      const file = req.files[docType][0];
-
-      await pool.query(
-        `INSERT INTO kyc_documents (vendor_id, doc_type, file_url)
-         VALUES ($1,$2,$3)`,
-        [vendorId, docType, file.path] // Cloudinary URL
-      );
+    for (const [docType, url] of Object.entries(kycUrls)) {
+      if (url) {
+        await pool.query(
+          `INSERT INTO kyc_documents (vendor_id, doc_type, file_url)
+           VALUES ($1,$2,$3)`,
+          [vendorId, docType, url]
+        );
+      }
     }
 
+    // Generate Auto Login Token
+    const token = jwt.sign(
+      { id: vendor.id, role: "VENDOR" },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
     return res.status(201).json({
-      message: "Signup successful. Await admin approval."
+      message: "Signup successful. Await admin approval.",
+      token,
+      vendorStatus: vendor.status,
+      vendor: {
+        id: vendor.id,
+        shopName: vendor.shop_name,
+        ownerName: vendor.owner_name,
+        email: vendor.email
+      }
     });
 
   } catch (err) {
     console.error("SIGNUP ERROR:", err);
+    if (err.code === '23505') { // Unique violation (e.g. email)
+      return res.status(400).json({ message: "Email already registered" });
+    }
     return res.status(500).json({ message: "Signup failed" });
   }
 };
